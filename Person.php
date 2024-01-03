@@ -658,34 +658,53 @@ EOF;
 
     #------------------------------------------------------------------[ Died ]---
 
-    /**
-     * Get date of death with place and cause
-     * @return array [day,month,mon,year,place,cause]
-     *         where month is the month name, and mon the month number
-     * @see IMDB person page /bio
-     */
     public function died()
     {
-        if (empty($this->deathday))
-        {
-            $page = $this->getPage("Bio");
-            if (preg_match('|Died</td>(.*?)</td|ims', $page, $match))
-            {
-                preg_match('|/search/name\?death_date=(\d+)-(\d+)-(\d+).*?\n?>(.*?) \d+<|', $match[1], $daymonyear);
-                preg_match('|/search/name\?death_place=.*?"\s*>(.*?)<|ims', $match[1], $dloc);
-                preg_match('/\(([^\)]+)\)/ims', $match[1], $dcause);
-                $this->deathday = array(
-                    "day" => @$daymonyear[3],
-                    "month" => @$daymonyear[4],
-                    "mon" => @$daymonyear[2],
-                    "year" => @$daymonyear[1],
-                    "place" => @trim(strip_tags($dloc[1])),
-                    "cause" => @$dcause[1]
-                );
+        if (empty($this->deathday)) {
+            $query = <<<EOF
+query DeathDate(\$id: ID!) {
+  name(id: \$id) {
+    deathDate {
+      dateComponents {
+        day
+        month
+        year
+      }
+    }
+    deathLocation {
+      text
+    }
+    deathCause {
+      text
+    }
+    deathStatus
+  }
+}
+EOF;
+            $data = $this->graphql->query($query, "DeathDate", ["id" => "nm$this->imdbID"]);
+            $day = isset($data->name->deathDate->dateComponents->day) ? $data->name->deathDate->dateComponents->day : '';
+            $monthInt = isset($data->name->deathDate->dateComponents->month) ? $data->name->deathDate->dateComponents->month : '';
+            $monthName = '';
+            if (!empty($monthInt)) {
+                $monthName = date("F", mktime(0, 0, 0, $monthInt, 10));
             }
+            $year = isset($data->name->deathDate->dateComponents->year) ? $data->name->deathDate->dateComponents->year : '';
+            $place = isset($data->name->deathLocation->text) ? $data->name->deathLocation->text : '';
+            $cause = isset($data->name->deathCause->text) ? $data->name->deathCause->text : '';
+            $status = isset($data->name->deathStatus) ? $data->name->deathStatus : '';
+            $this->deathday = array(
+                "day" => $day,
+                "month" => $monthName,
+                "mon" => $monthInt,
+                "year" => $year,
+                "place" => $place,
+                "cause" => $cause,
+                "status" => $status
+            );
         }
         return $this->deathday;
     }
+
 
     #-----------------------------------------------------------[ Body Height ]---
 
@@ -902,60 +921,41 @@ EOF;
     #---------------------------------------------------------------[ MiniBio ]---
 
     /** Get the person's mini bio
-     * @return array bio array [0..n] of array[string desc, array author[url,name]]
+     * @return array bio array [0..n] of array[string desc, string author]
      * @see IMDB person page /bio
      */
     public function bio()
     {
-        if (empty($this->bio_bio))
-        {
-            $page = $this->getPage("Bio");
-            if (!$page)
-            {
-                return array();
-            } // no such page
-            if (preg_match(
-                '!<h4 class="li_group">Mini Bio[^>]+?>(.+?)<(h4 class="li_group"|div class="article")!ims',
-                $page,
-                $block
-            ))
-            {
-                preg_match_all(
-                    '!<div class="soda.*?\s*<p>\s*(?<bio>.+?)\s</p>\s*<p><em>- IMDb Mini Biography By:\s*(?<author>.+?)\s*</em>!ims',
-                    $block[1],
-                    $matches
-                );
-                for ($i = 0; $i < count($matches[0]); ++$i)
-                {
-                    $bio_bio["desc"] = str_replace(
-                        "href=\"/name/nm",
-                        "href=\"https://" . $this->imdbsite . "/name/nm",
-                        str_replace(
-                            "href=\"/title/tt",
-                            "href=\"https://" . $this->imdbsite . "/title/tt",
-                            str_replace(
-                                '/search/name',
-                                'https://' . $this->imdbsite . '/search/name',
-                                $matches['bio'][$i]
-                            )
-                        )
-                    );
-                    $author = 'Written by ' . (str_replace(
-                            '/search/name',
-                            'https://' . $this->imdbsite . '/search/name',
-                            $matches['author'][$i]
-                        ));
-                    if (@preg_match('!href="(.+?)"[^>]*>\s*(.*?)\s*</a>!', $author, $match))
-                    {
-                        $bio_bio["author"]["url"] = $match[1];
-                        $bio_bio["author"]["name"] = $match[2];
-                    } else
-                    {
-                        $bio_bio["author"]["url"] = '';
-                        $bio_bio["author"]["name"] = trim($matches['author'][$i]);
+        if (empty($this->bio_bio)) {
+            $query = <<<EOF
+query MiniBio(\$id: ID!) {
+  name(id: \$id) {
+    bios(first: 9999) {
+      edges {
+        node {
+          text {
+            plainText
+          }
+          author {
+            plainText
+          }
+        }
+      }
+    }
+  }
+}
+EOF;
+            $data = $this->graphql->query($query, "MiniBio", ["id" => "nm$this->imdbID"]);
+            foreach ($data->name->bios->edges as $edge) {
+                $bio_bio["desc"] = isset($edge->node->text->plainText) ? $edge->node->text->plainText : '';
+                $bioAuthor = '';
+                if ($edge->node->author != null) {
+                    if (isset($edge->node->author->plainText)) {
+                        $bioAuthor = $edge->node->author->plainText;
                     }
-                    $this->bio_bio[] = $bio_bio;
                 }
+                $bio_bio["author"] = $bioAuthor;
+                $this->bio_bio[] = $bio_bio;
             }
         }
         return $this->bio_bio;
