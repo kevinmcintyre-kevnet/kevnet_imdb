@@ -1457,31 +1457,46 @@ EOF;
      * @return array [country => rating] or [country => [rating,]]
      * @see IMDB Parental Guidance page / (parentalguide)
      */
-    public function mpaa($ratings = false)
+    public function mpaa()
     {
         if (empty($this->mpaas)) {
-            $xpath = $this->getXpathPage("ParentalGuide");
-            $cells = $xpath->query("//section[@id=\"certificates\"]//li[@class=\"ipl-inline-list__item\"]");
-            foreach ($cells as $cell) {
-                if ($a = $cell->getElementsByTagName('a')->item(0)) {
-                    $mpaa = explode(':', $a->nodeValue, 2);
-                    $country = trim($mpaa[0]);
-                    $rating = isset($mpaa[1]) ? $mpaa[1] : '';
-
-                    if ($ratings) {
-                        if (!isset($this->mpaas[$country])) {
-                            $this->mpaas[$country] = [];
-                        }
-
-                        $this->mpaas[$country][] = $rating;
-                    } else {
-                        $this->mpaas[$country] = $rating;
+            $query = <<<EOF
+query Mpaa(\$id: ID!) {
+  title(id: \$id) {
+    certificates(first: 9999) {
+      edges {
+        node {
+          country {
+            text
+          }
+          rating
+          attributes {
+            text
+          }
+        }
+      }
+    }
+  }
+}
+EOF;
+            $data = $this->graphql->query($query, "Mpaa", ["id" => "tt$this->imdbID"]);
+            foreach ($data->title->certificates->edges as $edge) {
+                $comments = array();
+                foreach ($edge->node->attributes as $key => $attribute) {
+                    if (isset($attribute->text) && $attribute->text != '') {
+                        $comments[] = $attribute->text;
                     }
                 }
+                $this->mpaas[] = array(
+                    "country" => isset($edge->node->country->text) ? $edge->node->country->text : '',
+                    "rating" => isset($edge->node->rating) ? $edge->node->rating : '',
+                    "comment" => $comments
+                );
             }
         }
         return $this->mpaas;
     }
+
 
     /** Get the MPAA data (also known as PG or FSK) - including historical data
      * @return array mpaa (array[country][0..n]=rating)
@@ -3170,11 +3185,16 @@ EOF;
      */
     public function awards($compat = true)
     {
-//       if (empty($this->awards)) {
-//            $this->getPage("Awards");
-//            $row_s = strpos($this->page["Awards"], '<h1 class="header">Awards</h1>');
-//            $row_e = strpos($this->page["Awards"], '<div class="article"', $row_s);
-//            $block = substr($this->page["Awards"], $row_s, $row_e - $row_s);
+       if (empty($this->awards)) {
+
+           $this->getPage("Awards");
+           $row_s = strpos($this->page["Awards"], '<h1 class="header">Awards</h1>');
+            $row_e = strpos($this->page["Awards"], '<div class="article"', $row_s);
+            $block = substr($this->page["Awards"], $row_s, $row_e - $row_s);
+           print_r($row_s);
+           print_r($row_e);
+           print_r($block);
+           echo "\nHERE\n";
 //            preg_match_all(
 //                '!<h3>\s*(?<festival>.+?)\s*<a [^>]+>\s*(?<year>\d{4}).*?</h3>\s*<table [^>]+>(?<table>.+?)</table>!ims',
 //                $block,
@@ -3233,7 +3253,8 @@ EOF;
 //                                $this->awards[$festival]['entries'][] = array(
 //                                    'year' => $matches['year'][$i],
 //                                    'won' => $won,
-//                                    'category' => $cat,
+//                                    'category' => $cat,//       if (empty($this->awards)) {
+//
 //                                    'award' => $award,
 //                                    'people' => $people,
 //                                    'comment' => '',
@@ -3256,8 +3277,9 @@ EOF;
 //                }
 //                continue;
 //            }
-//        }
-//        return $this->awards;
+        }
+
+        return $this->awards;
     }
 
 
@@ -3283,6 +3305,7 @@ EOF;
             $this->main_awards['award'] = '';
             $this->main_awards['nominations'] = '';
             $this->main_awards['wins'] = '';
+            print_r($data);
             if (isset($data->title->prestigiousAwardSummary) && $data->title->prestigiousAwardSummary !== null) {
                 $this->main_awards['award'] = $data->title->prestigiousAwardSummary->award->text;
                 $this->main_awards['nominations'] = $data->title->prestigiousAwardSummary->nominations;

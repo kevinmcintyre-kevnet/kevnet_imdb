@@ -1,0 +1,8 @@
+# PHPStorm project - user specific
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dataSources.*
+.idea/dictionaries/*.xml
+.idea/dataSources.xml
+.idea/dictionaries/keywords.xml
+.idea/*.*
