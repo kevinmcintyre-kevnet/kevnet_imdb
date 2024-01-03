@@ -3191,10 +3191,10 @@ EOF;
            $row_s = strpos($this->page["Awards"], '<h1 class="header">Awards</h1>');
             $row_e = strpos($this->page["Awards"], '<div class="article"', $row_s);
             $block = substr($this->page["Awards"], $row_s, $row_e - $row_s);
-           print_r($row_s);
-           print_r($row_e);
-           print_r($block);
-           echo "\nHERE\n";
+//           print_r($row_s);
+//           print_r($row_e);
+//           print_r($block);
+//           echo "\nHERE\n";
 //            preg_match_all(
 //                '!<h3>\s*(?<festival>.+?)\s*<a [^>]+>\s*(?<year>\d{4}).*?</h3>\s*<table [^>]+>(?<table>.+?)</table>!ims',
 //                $block,
